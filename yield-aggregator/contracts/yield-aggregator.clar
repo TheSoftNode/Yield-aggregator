@@ -391,3 +391,118 @@
         (ok net-withdrawal)
     )
 )
+
+;; Compound all earnings in a vault
+(define-public (harvest-vault (vault-id uint))
+    (let ((vault-data (unwrap! (map-get? vaults vault-id) ERR_VAULT_NOT_FOUND)))
+        (asserts! (not (var-get emergency-pause)) ERR_VAULT_PAUSED)
+        (asserts! (get is-active vault-data) ERR_VAULT_PAUSED)
+        ;; Compound earnings
+        (asserts! (compound-vault-earnings vault-id) (ok false))
+        (ok true)
+    )
+)
+
+;; Rebalance vault strategies (admin only)
+(define-public (rebalance-vault
+        (vault-id uint)
+        (new-strategy-id uint)
+    )
+    (let (
+            (vault-data (unwrap! (map-get? vaults vault-id) ERR_VAULT_NOT_FOUND))
+            (strategy-data (unwrap! (map-get? yield-strategies new-strategy-id)
+                ERR_STRATEGY_NOT_FOUND
+            ))
+        )
+        (asserts! (is-admin tx-sender) ERR_NOT_AUTHORIZED)
+        (asserts! (get is-active strategy-data) ERR_STRATEGY_INACTIVE)
+        ;; Harvest current position before rebalancing
+        (try! (harvest-vault vault-id))
+        ;; Update vault strategy
+        (map-set vaults vault-id
+            (merge vault-data { strategy-id: new-strategy-id })
+        )
+        ;; Update strategy allocation
+        (map-set strategy-allocations {
+            vault-id: vault-id,
+            strategy-id: new-strategy-id,
+        }
+            u10000
+        )
+        (ok true)
+    )
+)
+
+;; Admin Functions
+
+;; Add or update yield strategy
+(define-public (add-strategy
+        (name (string-ascii 64))
+        (protocol (string-ascii 32))
+        (apy uint)
+        (capacity uint)
+        (risk-score uint)
+        (contract-addr principal)
+    )
+    (let ((strategy-id (+ (var-get strategy-counter) u1)))
+        (asserts! (is-admin tx-sender) ERR_NOT_AUTHORIZED)
+        (map-set yield-strategies strategy-id {
+            name: name,
+            protocol: protocol,
+            apy: apy,
+            tvl-capacity: capacity,
+            current-tvl: u0,
+            risk-score: risk-score,
+            is-active: true,
+            contract-address: contract-addr,
+            last-updated: stacks-block-height,
+        })
+        (var-set strategy-counter strategy-id)
+        (ok strategy-id)
+    )
+)
+
+;; Update strategy APY
+(define-public (update-strategy-apy
+        (strategy-id uint)
+        (new-apy uint)
+    )
+    (let ((strategy-data (unwrap! (map-get? yield-strategies strategy-id) ERR_STRATEGY_NOT_FOUND)))
+        (asserts! (is-admin tx-sender) ERR_NOT_AUTHORIZED)
+        (map-set yield-strategies strategy-id
+            (merge strategy-data {
+                apy: new-apy,
+                last-updated: stacks-block-height,
+            })
+        )
+        (ok new-apy)
+    )
+)
+
+;; Set platform fees
+(define-public (set-platform-fee (new-fee uint))
+    (begin
+        (asserts! (is-admin tx-sender) ERR_NOT_AUTHORIZED)
+        (asserts! (<= new-fee u1000) ERR_INVALID_AMOUNT) ;; Max 10% fee
+        (var-set platform-fee-rate new-fee)
+        (ok new-fee)
+    )
+)
+
+;; Add admin role
+(define-public (add-admin (new-admin principal))
+    (begin
+        (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_NOT_AUTHORIZED)
+        (map-set admin-roles new-admin true)
+        (ok true)
+    )
+)
+
+;; Emergency pause
+(define-public (toggle-emergency-pause)
+    (begin
+        (asserts! (is-admin tx-sender) ERR_NOT_AUTHORIZED)
+        (var-set emergency-pause (not (var-get emergency-pause)))
+        (ok (var-get emergency-pause))
+    )
+)
