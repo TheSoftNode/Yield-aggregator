@@ -1,4 +1,4 @@
-# YieldAggregator
+# StacksYield
 
 A comprehensive DeFi yield aggregator that automatically finds and compounds the best yield opportunities across Stacks blockchain protocols.
 
@@ -290,4 +290,4 @@ MIT License
 
 ---
 
-**YieldAggregator** - Maximizing DeFi yields through intelligent automation and risk management on the Stacks blockchain.
+**StacksYield** - Maximizing DeFi yields through intelligent automation and risk management on the Stacks blockchain.
