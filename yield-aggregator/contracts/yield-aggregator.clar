@@ -506,3 +506,91 @@
         (ok (var-get emergency-pause))
     )
 )
+
+;; Read-only Functions
+
+;; Get vault information
+(define-read-only (get-vault-info (vault-id uint))
+    (map-get? vaults vault-id)
+)
+
+;; Get user position
+(define-read-only (get-user-position
+        (vault-id uint)
+        (user principal)
+    )
+    (map-get? user-positions {
+        vault-id: vault-id,
+        user: user,
+    })
+)
+
+;; Get user's vault value
+(define-read-only (get-user-vault-value
+        (vault-id uint)
+        (user principal)
+    )
+    (let (
+            (vault-data (unwrap! (map-get? vaults vault-id) u0))
+            (user-position (unwrap!
+                (map-get? user-positions {
+                    vault-id: vault-id,
+                    user: user,
+                })
+                u0
+            ))
+            (user-shares (get shares user-position))
+        )
+        (calculate-assets user-shares (get total-assets vault-data)
+            (get total-shares vault-data)
+        )
+    )
+)
+
+;; Get strategy information
+(define-read-only (get-strategy-info (strategy-id uint))
+    (map-get? yield-strategies strategy-id)
+)
+
+;; Get platform statistics
+(define-read-only (get-platform-stats)
+    {
+        total-value-locked: (var-get total-value-locked),
+        total-vaults: (var-get vault-counter),
+        total-strategies: (var-get strategy-counter),
+        platform-fee-rate: (var-get platform-fee-rate),
+        emergency-pause: (var-get emergency-pause),
+    }
+)
+
+;; Get user's all vaults
+(define-read-only (get-user-vaults (user principal))
+    (default-to (list) (map-get? user-vault-list user))
+)
+
+;; Helper function to find the maximum of two numbers
+(define-private (max
+        (a uint)
+        (b uint)
+    )
+    (if (> a b)
+        a
+        b
+    )
+)
+
+;; Get best APY available
+(define-read-only (get-best-apy)
+    (let (
+            (strategy1 (unwrap-panic (map-get? yield-strategies u1)))
+            (strategy2 (unwrap-panic (map-get? yield-strategies u2)))
+            (strategy3 (unwrap-panic (map-get? yield-strategies u3)))
+        )
+        (max (max (get apy strategy1) (get apy strategy2)) (get apy strategy3))
+    )
+)
+
+;; Check if user is admin
+(define-read-only (is-user-admin (user principal))
+    (is-admin user)
+)
